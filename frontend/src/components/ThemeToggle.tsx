@@ -41,7 +41,7 @@ export default function ThemeToggle() {
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
 
-    // Compute max radius to cover viewport
+    // Compute max radius to cover the entire viewport from the button center
     const maxR = Math.ceil(
       Math.max(
         Math.hypot(cx, cy),
@@ -56,29 +56,30 @@ export default function ThemeToggle() {
     // Set overlay background to the NEW theme color
     const newBg = isDark ? "#f7f7f7" : "#0a0a0a";
     overlay.style.backgroundColor = newBg;
-    overlay.style.display = "block";
 
+    // KEY FIX: use gsap.set to apply clip-path BEFORE making it visible.
+    // This ensures the circle starts at radius=0 in the same frame as display:block,
+    // so the browser never paints a full-screen overlay — eliminating the flash.
     const startClip = `circle(0px at ${cx}px ${cy}px)`;
     const endClip = `circle(${maxR}px at ${cx}px ${cy}px)`;
 
-    gsap.fromTo(
-      overlay,
-      { clipPath: startClip, opacity: 1 },
-      {
-        clipPath: endClip,
-        duration: 0.5,
-        ease: "power2.inOut",
-        onStart: () => {
-          // Switch the theme slightly after the animation begins
-          // so the underlying DOM switches while the overlay covers it
-          setTimeout(() => setTheme(isDark ? "light" : "dark"), 100);
-        },
-        onComplete: () => {
-          overlay.style.display = "none";
-          overlay.style.clipPath = "";
-        },
-      }
-    );
+    gsap.set(overlay, { clipPath: startClip, display: "block", opacity: 1 });
+
+    gsap.to(overlay, {
+      clipPath: endClip,
+      duration: 0.5,
+      ease: "power2.inOut",
+      onStart: () => {
+        // Switch the actual theme once the circle has grown enough to cover it.
+        // We wait until partway through so the underlying DOM switch
+        // happens while the overlay already hides it.
+        setTimeout(() => setTheme(isDark ? "light" : "dark"), 150);
+      },
+      onComplete: () => {
+        // Hide the overlay; clear clip-path so it's ready for next toggle
+        gsap.set(overlay, { display: "none", clipPath: "" });
+      },
+    });
   };
 
   return (
