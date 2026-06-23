@@ -20,10 +20,10 @@ Tracking doc so work can resume across sessions. Each feature ends committed, te
 - [x] #8 Area selector on welcome → tailors suggested questions + gives the agent area context
 - [x] #2 Human escalation handoff (button on escalated answers → mailto/copy to Chief of Staff)
 
-### Phase B — Grounding & visibility (medium) — IN PROGRESS
-- [ ] #5 First-week checklist (interactive, from Doc3, persisted in localStorage) — not started
-- [~] #3 Inline citations — BACKEND DONE (ChatResponse.citations); frontend display pending
-- [~] #4 Gap dashboard — BACKEND DONE (GET /admin/gaps, gated by INGEST_API_KEY); frontend /gaps page pending
+### Phase B — Grounding & visibility (medium) ✅ DONE
+- [x] #5 First-week checklist (interactive, from Doc3, persisted in localStorage)
+- [x] #3 Inline citations (backend ChatResponse.citations + frontend passage-on-click)
+- [x] #4 Gap dashboard (GET /admin/gaps gated by INGEST_API_KEY + protected /gaps page)
 
 ### Phase C — Deep (hard, API-sensitive)
 - [ ] #1 Streaming responses (backend SSE + frontend incremental render; cache stores final text)

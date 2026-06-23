@@ -448,7 +448,11 @@ agent-30x/
 - **Markdown rendering** so the agent's tables and formatting display properly (react-markdown + remark-gfm)
 - **Light/dark theme** with the 30X brand identity (next-themes, persisted, no flash)
 - **Motion** via GSAP for message and welcome-screen entrance animations (respects `prefers-reduced-motion`)
-- **Source attribution** — each answer shows which internal document it came from
+- **Source attribution with inline citations** — each answer shows its source documents, and clicking a source reveals the exact passage it was grounded in
+- **Area-aware onboarding** — new hires pick their area to get tailored starter questions and context
+- **First-week checklist** — the real Doc3 first-week plan as an interactive, persisted checklist
+- **Human escalation** — when the agent can't answer, a one-click handoff to the Chief of Staff
+- **Gap dashboard** (`/gaps`, key-protected) — a living report of questions the agent couldn't answer, so the team knows what to document next
 
 ---
 
