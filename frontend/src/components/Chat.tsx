@@ -453,6 +453,7 @@ export default function Chat({
           content: data.response,
           escalate: data.escalate,
           sources: data.sources,
+          citations: data.citations ?? [],
           timestamp: new Date(),
         };
 

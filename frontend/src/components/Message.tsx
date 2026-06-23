@@ -5,7 +5,7 @@ import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { Message } from "@/types/chat";
+import type { Message, Citation } from "@/types/chat";
 import type { Components } from "react-markdown";
 
 gsap.registerPlugin(useGSAP);
@@ -445,7 +445,11 @@ export default function MessageBubble({ message, precedingQuestion = "" }: Props
               Fuentes:
             </span>
             {message.sources.map((src) => (
-              <SourceChip key={src} filename={src} />
+              <SourceChip
+                key={src}
+                filename={src}
+                citations={(message.citations ?? []).filter((c) => c.source_doc === src)}
+              />
             ))}
           </div>
         )}
@@ -454,17 +458,26 @@ export default function MessageBubble({ message, precedingQuestion = "" }: Props
   );
 }
 
-function SourceChip({ filename }: { filename: string }) {
+function SourceChip({
+  filename,
+  citations,
+}: {
+  filename: string;
+  citations: Citation[];
+}) {
   const [open, setOpen] = useState(false);
 
   // Strip path prefix for display — show just the base filename
   const displayName = filename.split("/").pop() ?? filename;
+
+  const hasCitations = citations.length > 0;
 
   return (
     <div className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
         aria-label={`Ver fuente: ${displayName}`}
+        aria-expanded={open}
         className="text-xs px-2 py-0.5 rounded transition-colors hover:border-[var(--accent)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]"
         style={{
           backgroundColor: "var(--border)",
@@ -473,6 +486,15 @@ function SourceChip({ filename }: { filename: string }) {
         }}
       >
         {displayName}
+        {hasCitations && (
+          <span
+            className="ml-1 inline-block"
+            aria-hidden="true"
+            style={{ color: "var(--accent)", fontWeight: 600 }}
+          >
+            ↗
+          </span>
+        )}
       </button>
 
       {open && (
@@ -484,17 +506,81 @@ function SourceChip({ filename }: { filename: string }) {
             onClick={() => setOpen(false)}
           />
           <div
-            className="absolute bottom-full left-0 mb-1.5 z-20 px-3 py-2 rounded-lg text-xs shadow-lg max-w-xs break-all"
+            className="absolute bottom-full left-0 mb-1.5 z-20 rounded-lg text-xs shadow-xl"
             style={{
+              width: "min(320px, 80vw)",
               backgroundColor: "var(--surface)",
               border: "1px solid var(--border)",
               color: "var(--text)",
             }}
+            role="dialog"
+            aria-label={`Pasajes de ${displayName}`}
           >
-            <p className="font-medium mb-0.5" style={{ color: "var(--accent)" }}>
-              Fuente
-            </p>
-            <p>{filename}</p>
+            {/* Header */}
+            <div
+              className="flex items-center justify-between px-3 py-2 border-b"
+              style={{ borderColor: "var(--border)" }}
+            >
+              <div className="flex items-center gap-1.5">
+                {/* Document icon */}
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                  style={{ color: "var(--accent)", flexShrink: 0 }}
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                </svg>
+                <span className="font-semibold truncate" style={{ color: "var(--accent)" }}>
+                  {displayName}
+                </span>
+              </div>
+              <button
+                onClick={() => setOpen(false)}
+                aria-label="Cerrar"
+                className="rounded p-0.5 hover:opacity-70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]"
+                style={{ color: "var(--muted)" }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Citation passages */}
+            {hasCitations ? (
+              <ul className="flex flex-col divide-y" style={{ borderColor: "var(--border)" }}>
+                {citations.map((cit, i) => (
+                  <li key={i} className="px-3 py-2.5 flex flex-col gap-1.5">
+                    <p
+                      className="leading-relaxed"
+                      style={{ color: "var(--text)", fontSize: "0.75rem" }}
+                    >
+                      &ldquo;{cit.content}&rdquo;
+                    </p>
+                    <span
+                      className="self-end font-medium"
+                      style={{ color: "var(--muted)", fontSize: "0.65rem" }}
+                      title={`Similitud semántica: ${Math.round(cit.similarity * 100)}%`}
+                    >
+                      {Math.round(cit.similarity * 100)}% relevante
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="px-3 py-2.5 break-all" style={{ color: "var(--muted)" }}>
+                {filename}
+              </p>
+            )}
           </div>
         </>
       )}
