@@ -1,8 +1,12 @@
 @import "tailwindcss";
 
-/* ── Dark theme (default) ── */
+/* ── Dark theme (default) ──
+   The theme selectors are prefixed with `html` (specificity 0,1,1) so they
+   reliably win over the bare `:root` (0,1,0) once next-themes sets the class.
+   Without the `html` prefix, `:root` ties `.light` on specificity and, combined
+   with Tailwind v4's layering, the dark defaults were never overridden. */
 :root,
-.dark {
+html.dark {
   --accent: #c8ff00;
   --bg: #0a0a0a;
   --surface: #141414;
@@ -12,7 +16,7 @@
 }
 
 /* ── Light theme ── */
-.light {
+html.light {
   --accent: #8fb800; /* slightly darker lime for WCAG contrast on white */
   --bg: #f7f7f7;
   --surface: #ffffff;
