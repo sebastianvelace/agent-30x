@@ -17,16 +17,18 @@ export default function Logo({ height = 32, className }: LogoProps) {
     setMounted(true);
   }, []);
 
+  // Wordmark assets are 512x176 → aspect ratio 2.91:1 (width:height)
+  const RATIO = 512 / 176;
+
   if (!mounted) {
     // Placeholder to avoid layout shift before hydration
-    return <div style={{ width: height * 2.5, height }} aria-hidden="true" />;
+    return <div style={{ width: height * RATIO, height }} aria-hidden="true" />;
   }
 
   const isDark = resolvedTheme === "dark";
   const src = isDark ? "/30x-mark-on-dark.png" : "/30x-mark-on-light.png";
 
-  // Approximate aspect ratio of the wordmark assets (~2.5:1 width:height)
-  const width = Math.round(height * 2.5);
+  const width = Math.round(height * RATIO);
 
   return (
     <Image
