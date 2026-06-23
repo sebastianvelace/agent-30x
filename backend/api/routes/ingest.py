@@ -1,5 +1,5 @@
 import os
-from fastapi import APIRouter, UploadFile, File, HTTPException, Header
+from fastapi import APIRouter, UploadFile, File, HTTPException, Header, Depends
 from ingestion.parser import extract_text
 from ingestion.chunker import chunk_text
 from ingestion.embedder import embed_and_store
@@ -10,18 +10,17 @@ router = APIRouter()
 INGEST_API_KEY = os.environ.get("INGEST_API_KEY", "")
 
 
-def verify_key(x_api_key: str = Header(...)):
+def verify_key(x_api_key: str = Header(default=None)):
+    """Dependency that enforces API key auth before FastAPI validates other parameters."""
     if x_api_key != INGEST_API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 
-@router.post("/ingest")
+@router.post("/ingest", dependencies=[Depends(verify_key)])
 async def ingest(
     file: UploadFile = File(...),
-    x_api_key: str = Header(...),
+    x_api_key: str = Header(default=None),
 ):
-    if x_api_key != INGEST_API_KEY:
-        raise HTTPException(status_code=401, detail="Invalid API key")
 
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are accepted")
