@@ -95,7 +95,7 @@ const LOADING_TEXTS = [
 
 // Static follow-up suggestions per assistant turn (cosmetic, not dynamic)
 const FOLLOW_UPS = [
-  "¿Podés darme más detalles?",
+  "¿Puedes darme más detalles?",
   "¿Quién es el responsable de esto?",
   "¿Qué herramientas se usan para esto?",
 ];
@@ -216,7 +216,7 @@ function AreaSelector({
         style={{ color: "var(--muted)" }}
         id="area-selector-label"
       >
-        ¿De qué área sos?
+        ¿De qué área eres?
       </p>
       <div
         className="flex flex-wrap gap-2"
@@ -611,7 +611,7 @@ export default function Chat({
                   className="welcome-subtext text-sm max-w-sm leading-relaxed"
                   style={{ color: "var(--muted)" }}
                 >
-                  Preguntame lo que quieras sobre la organización, los programas, el equipo o las
+                  Pregúntame lo que quieras sobre la organización, los programas, el equipo o las
                   herramientas. Respondo con base en los documentos internos de 30X.
                 </p>
               </div>

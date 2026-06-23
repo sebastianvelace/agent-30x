@@ -214,11 +214,11 @@ function EscalationCTA({ question }: { question: string }) {
 
   const subject = encodeURIComponent("Pregunta de onboarding");
   const body = encodeURIComponent(
-    `Hola,\n\nTengo una pregunta sobre el onboarding que el agente no pudo responder completamente:\n\n"${question}"\n\n¿Me podés ayudar?\n\nGracias.`
+    `Hola,\n\nTengo una pregunta sobre el onboarding que el agente no pudo responder completamente:\n\n"${question}"\n\n¿Me puedes ayudar?\n\nGracias.`
   );
   const mailtoHref = `mailto:${CHIEF_OF_STAFF_EMAIL}?subject=${subject}&body=${body}`;
 
-  const prefillText = `Para: ${CHIEF_OF_STAFF_EMAIL}\nAsunto: Pregunta de onboarding\n\nHola,\n\nTengo una pregunta sobre el onboarding que el agente no pudo responder completamente:\n\n"${question}"\n\n¿Me podés ayudar?\n\nGracias.`;
+  const prefillText = `Para: ${CHIEF_OF_STAFF_EMAIL}\nAsunto: Pregunta de onboarding\n\nHola,\n\nTengo una pregunta sobre el onboarding que el agente no pudo responder completamente:\n\n"${question}"\n\n¿Me puedes ayudar?\n\nGracias.`;
 
   const handleCopyMessage = async () => {
     try {

@@ -50,7 +50,7 @@ export default function ChatInput({ onSend, disabled }: Props) {
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
         onInput={handleInput}
-        placeholder="Preguntá lo que necesites sobre 30X..."
+        placeholder="Pregunta lo que necesites sobre 30X..."
         rows={1}
         disabled={disabled}
         className="flex-1 resize-none bg-transparent text-sm leading-relaxed outline-none placeholder:text-[var(--muted)] disabled:opacity-50"

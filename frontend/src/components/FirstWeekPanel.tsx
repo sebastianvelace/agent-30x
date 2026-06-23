@@ -31,7 +31,7 @@ const CHECKLIST: ChecklistGroup[] = [
     heading: "Día 2–3",
     items: [
       { id: "d23-proyectos", label: "Explorar los proyectos activos" },
-      { id: "d23-contribuir", label: "Identificar dónde podés contribuir de inmediato" },
+      { id: "d23-contribuir", label: "Identificar dónde puedes contribuir de inmediato" },
       { id: "d23-docs", label: "Leer la documentación existente antes de preguntar" },
     ],
   },
