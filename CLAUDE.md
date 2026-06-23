@@ -93,7 +93,7 @@ chore(docs): document identified gaps in 30X onboarding documents
 These are documented so future sessions don't re-derive them:
 
 1. **RAG over context stuffing** — 10-15x cheaper at scale; survives document growth without code changes
-2. **Voyage AI over OpenAI embeddings** — Anthropic acquisition, better MTEB scores for Spanish, single API key
+2. **Voyage AI over OpenAI embeddings** — Anthropic's recommended embedding provider (Anthropic has no embeddings endpoint), strong MTEB scores for Spanish. NOTE: Voyage is a separate service with its own `voyageai` SDK and its own VOYAGE_API_KEY — it does NOT share the Anthropic key.
 3. **Supabase pgvector over Pinecone/Qdrant** — standard PostgreSQL, no vendor lock-in, inspectable with SQL
 4. **Session memory on client** — stateless backend, React state holds history, sufficient for short onboarding sessions
 5. **Lazy client initialization** — Supabase and Anthropic clients use `lru_cache` factory to avoid import-time failures

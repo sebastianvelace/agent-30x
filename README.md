@@ -116,7 +116,7 @@ If similarity score < threshold → escalate to Chief of Staff
 | Layer | Technology | Why |
 |-------|-----------|-----|
 | LLM | Claude Sonnet 4.6 (Anthropic) | Best quality/cost ratio for Spanish responses, long context |
-| Embeddings | Voyage AI `voyage-3` | Acquired by Anthropic in 2024; outperforms OpenAI `text-embedding-3-large` on MTEB retrieval benchmarks for Spanish content |
+| Embeddings | Voyage AI `voyage-3` | Anthropic's recommended embedding provider (Anthropic acquired Voyage in 2024 but they remain separate services with separate SDKs and keys); strong MTEB retrieval performance for Spanish content |
 | Vector store | Supabase pgvector | Standard PostgreSQL with vector extension — no vendor lock-in, plain SQL for inspection and debugging |
 | Backend | FastAPI (Python) | Typed, native async, automatic OpenAPI docs |
 | Frontend | Next.js 15 + Tailwind CSS | App Router, RSC, native Vercel deploy |
@@ -132,7 +132,8 @@ If similarity score < threshold → escalate to Chief of Staff
 - [Supabase](https://supabase.com) account (free tier) — you'll need the project URL and `service_role` key
 - [Railway](https://railway.app) account (free tier)
 - [Vercel](https://vercel.com) account (free tier)
-- Anthropic API key — covers both Claude and Voyage AI ([console.anthropic.com](https://console.anthropic.com))
+- Anthropic API key for Claude ([console.anthropic.com](https://console.anthropic.com))
+- Voyage AI API key for embeddings ([dash.voyageai.com](https://dash.voyageai.com), free tier) — separate service and key from Anthropic
 
 ---
 
@@ -168,8 +169,11 @@ npm install
 ### Backend (`backend/.env`)
 
 ```env
-# Anthropic — Claude + Voyage AI (single key covers both)
+# Anthropic — Claude (LLM)
 ANTHROPIC_API_KEY=sk-ant-...
+
+# Voyage AI — embeddings (separate service, separate key)
+VOYAGE_API_KEY=pa-...
 
 # Supabase
 SUPABASE_URL=https://xxxx.supabase.co
@@ -360,7 +364,7 @@ The 3 current 30X documents fit in Claude Sonnet's context window. Technically, 
 
 ### Why Voyage AI and not OpenAI embeddings?
 
-Voyage AI was acquired by Anthropic in November 2024. Its `voyage-3` model outperforms OpenAI's `text-embedding-3-large` on MTEB benchmarks for Spanish and enterprise content retrieval. Since the stack already uses the Anthropic API for Claude, Voyage AI consolidates the dependency into a single vendor and a single API key.
+Voyage AI was acquired by Anthropic in November 2024 and is Anthropic's officially recommended embedding provider — Anthropic's own API has no embeddings endpoint. Note that despite the acquisition, Voyage remains a separate service: it has its own SDK (`voyageai`) and its own API key, distinct from the Anthropic key used for Claude. Its `voyage-3` model performs strongly on MTEB benchmarks for Spanish and enterprise content retrieval, which is what this onboarding use case needs.
 
 ### Why Supabase pgvector and not Pinecone/Qdrant?
 
