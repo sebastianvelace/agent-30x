@@ -12,13 +12,79 @@ gsap.registerPlugin(useGSAP);
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-const SUGGESTED_QUESTIONS = [
+// ── Area selector data ──────────────────────────────────────────────────────
+// Six real 30X operational areas, grounded in actual tools and roles from Doc3.
+const AREAS = [
+  "Comercial",
+  "Programas",
+  "Comunidad",
+  "Contenido",
+  "Tech/Ops",
+  "Talento",
+  "Prefiero no decir",
+] as const;
+
+type Area = (typeof AREAS)[number];
+
+// Default questions shown when no area is selected
+const DEFAULT_QUESTIONS = [
   "¿Qué es 30X y en qué países tiene presencia?",
   "¿Qué herramientas usa el equipo?",
   "¿Qué se espera de mí esta primera semana?",
   "¿Cómo funciona una cohorte de principio a fin?",
   "¿A quién le escribo si tengo un bloqueo técnico?",
 ];
+
+// Area-specific suggested questions grounded in real tools/roles per Doc3.
+// Each array has 2-4 area questions + 1 general question.
+const AREA_QUESTIONS: Record<string, string[]> = {
+  Comercial: [
+    "¿Cómo gestiono el pipeline de ventas en HubSpot?",
+    "¿Cuál es el proceso de seguimiento de leads en Airtable?",
+    "¿Qué diferencia hay entre el rol de BDR y Closer en 30X?",
+    "¿Cómo estructuro una llamada de cierre con un potencial cliente?",
+    "¿Qué se espera de mí esta primera semana?",
+  ],
+  Programas: [
+    "¿Cómo se estructura una cohorte de principio a fin?",
+    "¿Qué herramientas usan para gestionar las sesiones en Zoom y Circle?",
+    "¿Cuál es el rol del Program Coordinator en una cohorte activa?",
+    "¿Cómo hago seguimiento al progreso de los participantes?",
+    "¿Qué se espera de mí esta primera semana?",
+  ],
+  Comunidad: [
+    "¿Cómo funciona la comunidad en Circle?",
+    "¿Cuáles son las estrategias de activación de red que usa 30X?",
+    "¿Cómo se organizan y promueven los eventos comunitarios?",
+    "¿Cómo mido el engagement de la comunidad?",
+    "¿Qué se espera de mí esta primera semana?",
+  ],
+  Contenido: [
+    "¿Cómo es la estrategia de contenido de 30X?",
+    "¿Qué herramientas usamos para diseñar en Canva y Figma?",
+    "¿Cómo se arma la parrilla editorial?",
+    "¿Qué formatos de contenido prioriza 30X?",
+    "¿Qué se espera de mí esta primera semana?",
+  ],
+  "Tech/Ops": [
+    "¿Qué automatizaciones tenemos en Make?",
+    "¿Cómo están integradas las herramientas internas?",
+    "¿Dónde documento los flujos de automatización?",
+    "¿A quién le escribo si tengo un bloqueo técnico?",
+    "¿Qué se espera de mí esta primera semana?",
+  ],
+  Talento: [
+    "¿Cómo es el proceso de reclutamiento en 30X?",
+    "¿Cómo se vive la cultura de la organización?",
+    "¿Qué cubre el proceso de onboarding de nuevos colaboradores?",
+    "¿Cómo se mide el desempeño del equipo?",
+    "¿Qué se espera de mí esta primera semana?",
+  ],
+  "Prefiero no decir": DEFAULT_QUESTIONS,
+};
+
+// localStorage key for persisting the selected area across sessions
+const AREA_STORAGE_KEY = "30x-selected-area-v1";
 
 // Cycling status texts for loading state
 const LOADING_TEXTS = [
@@ -33,6 +99,9 @@ const FOLLOW_UPS = [
   "¿Quién es el responsable de esto?",
   "¿Qué herramientas se usan para esto?",
 ];
+
+// Delay in ms before showing the cold-start warning message
+const COLD_START_DELAY_MS = 4000;
 
 interface Props {
   /** Imperative ref: calling it resets (clears active conversation). */
@@ -49,7 +118,9 @@ interface Props {
   clearActive: () => void;
 }
 
-function LoadingIndicator() {
+// ── LoadingIndicator ────────────────────────────────────────────────────────
+// Shows cycling status text + a branded warm-up hint after COLD_START_DELAY_MS.
+function LoadingIndicator({ showColdStartHint }: { showColdStartHint: boolean }) {
   const [textIdx, setTextIdx] = useState(0);
   const [pulse, setPulse] = useState(false);
 
@@ -64,7 +135,7 @@ function LoadingIndicator() {
   }, []);
 
   return (
-    <div className="flex justify-start">
+    <div className="flex justify-start flex-col gap-2">
       <div
         className="rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-3"
         style={{ backgroundColor: "var(--surface)", border: "1px solid var(--border)" }}
@@ -88,6 +159,152 @@ function LoadingIndicator() {
           {LOADING_TEXTS[textIdx]}
         </span>
       </div>
+
+      {/* Cold-start hint: shown only after COLD_START_DELAY_MS — #7 */}
+      {showColdStartHint && (
+        <p
+          className="text-xs px-1 leading-relaxed"
+          style={{ color: "var(--muted)" }}
+          role="status"
+          aria-live="polite"
+        >
+          El agente se está despertando — la primera respuesta puede tardar unos segundos.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── AreaSelector ────────────────────────────────────────────────────────────
+// Chip-based area picker for the welcome screen — #8.
+// Animates in with GSAP, respects prefers-reduced-motion.
+function AreaSelector({
+  selected,
+  onSelect,
+}: {
+  selected: Area | null;
+  onSelect: (area: Area) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useGSAP(
+    () => {
+      if (!containerRef.current) return;
+      const mm = gsap.matchMedia();
+      mm.add("(prefers-reduced-motion: no-preference)", () => {
+        gsap.fromTo(
+          containerRef.current!.querySelectorAll(".area-chip"),
+          { opacity: 0, scale: 0.92 },
+          {
+            opacity: 1,
+            scale: 1,
+            duration: 0.3,
+            ease: "back.out(1.4)",
+            stagger: 0.04,
+          }
+        );
+      });
+      return () => mm.revert();
+    },
+    { scope: containerRef }
+  );
+
+  return (
+    <div className="w-full max-w-md flex flex-col gap-2" ref={containerRef}>
+      <p
+        className="text-xs font-medium uppercase tracking-widest"
+        style={{ color: "var(--muted)" }}
+        id="area-selector-label"
+      >
+        ¿De qué área sos?
+      </p>
+      <div
+        className="flex flex-wrap gap-2"
+        role="group"
+        aria-labelledby="area-selector-label"
+      >
+        {AREAS.map((area) => {
+          const isSelected = selected === area;
+          return (
+            <button
+              key={area}
+              onClick={() => onSelect(area)}
+              aria-pressed={isSelected}
+              className="area-chip text-xs px-3 py-1.5 rounded-full transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+              style={{
+                backgroundColor: isSelected ? "var(--accent)" : "var(--surface)",
+                border: `1px solid ${isSelected ? "var(--accent)" : "var(--border)"}`,
+                color: isSelected ? "#0a0a0a" : "var(--text)",
+                fontWeight: isSelected ? 600 : 400,
+              }}
+            >
+              {area}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── ErrorBubble ─────────────────────────────────────────────────────────────
+// Friendly branded error state for failed requests — #7.
+// Distinguishes cold-start/network errors from generic failures.
+function ErrorBubble({
+  isColdStart,
+  onRetry,
+}: {
+  isColdStart: boolean;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="flex justify-start">
+      <div
+        className="max-w-[80%] flex flex-col gap-3 rounded-2xl rounded-bl-sm px-4 py-3"
+        style={{
+          backgroundColor: "var(--surface)",
+          border: "1px solid var(--border)",
+        }}
+        role="alert"
+        aria-live="assertive"
+      >
+        <div className="flex items-start gap-2">
+          {/* Warning icon */}
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            className="flex-shrink-0 mt-0.5"
+            style={{ color: "var(--accent)" }}
+          >
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <p className="text-sm leading-relaxed" style={{ color: "var(--text)" }}>
+            {isColdStart
+              ? "El agente está despertando o no responde. Probá de nuevo en unos segundos."
+              : "Hubo un error al conectar con el agente. Por favor, intentá de nuevo."}
+          </p>
+        </div>
+        <button
+          onClick={onRetry}
+          className="self-start text-xs px-3 py-1.5 rounded-lg font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+          style={{
+            backgroundColor: "var(--accent)",
+            color: "#0a0a0a",
+          }}
+          aria-label="Reintentar enviar el mensaje"
+        >
+          Reintentar
+        </button>
+      </div>
     </div>
   );
 }
@@ -103,8 +320,19 @@ export default function Chat({
   clearActive,
 }: Props) {
   const [loading, setLoading] = useState(false);
+  // #7: cold-start hint becomes visible after COLD_START_DELAY_MS of pending request
+  const [showColdStartHint, setShowColdStartHint] = useState(false);
+  // #7: tracks the last failed message for retry
+  const [pendingRetry, setPendingRetry] = useState<string | null>(null);
+  const [lastErrorWasColdStart, setLastErrorWasColdStart] = useState(false);
+
+  // #8: area selector state — persisted in localStorage
+  const [selectedArea, setSelectedArea] = useState<Area | null>(null);
+  const [areaLoaded, setAreaLoaded] = useState(false);
+
   const bottomRef = useRef<HTMLDivElement>(null);
   const welcomeRef = useRef<HTMLDivElement>(null);
+  const coldStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Use a ref to track the current activeId inside the async sendMessage
   // (avoids stale closure when conversation is created mid-flight)
@@ -119,8 +347,42 @@ export default function Chat({
     activeMessagesRef.current = activeMessages;
   }, [activeMessages]);
 
+  // #8: Load persisted area from localStorage after mount (SSR-safe)
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      const stored = localStorage.getItem(AREA_STORAGE_KEY);
+      if (stored && AREAS.includes(stored as Area)) {
+        setSelectedArea(stored as Area);
+      }
+    } catch {
+      // localStorage unavailable — ignore
+    }
+    setAreaLoaded(true);
+  }, [mounted]);
+
+  // #8: Persist area selection to localStorage whenever it changes
+  const handleAreaSelect = useCallback((area: Area) => {
+    setSelectedArea(area);
+    try {
+      localStorage.setItem(AREA_STORAGE_KEY, area);
+    } catch {
+      // localStorage unavailable — ignore
+    }
+  }, []);
+
+  // Derive the current suggested questions based on selected area — #8
+  const suggestedQuestions =
+    selectedArea && selectedArea !== "Prefiero no decir"
+      ? AREA_QUESTIONS[selectedArea]
+      : DEFAULT_QUESTIONS;
+
   const sendMessage = useCallback(
     async (content: string) => {
+      // Clear any previous retry state
+      setPendingRetry(null);
+      setLastErrorWasColdStart(false);
+
       // Ensure a conversation exists
       let convId = activeIdRef.current;
       if (!convId) {
@@ -128,9 +390,27 @@ export default function Chat({
         activeIdRef.current = convId;
       }
 
+      // #8: When an area is selected and this is the first user message in a conversation,
+      // prepend "Soy del área {area}. " to what the backend receives.
+      // The displayed bubble still shows the natural content so it feels organic.
+      const isFirstMessage = activeMessagesRef.current.length === 0;
+      const storedArea = (() => {
+        try {
+          return localStorage.getItem(AREA_STORAGE_KEY);
+        } catch {
+          return null;
+        }
+      })();
+      const areaPrefix =
+        isFirstMessage && storedArea && storedArea !== "Prefiero no decir"
+          ? `Soy del área ${storedArea}. `
+          : "";
+      const backendContent = areaPrefix + content;
+
       const userMsg: Message = {
         id: crypto.randomUUID(),
         role: "user",
+        // Display shows the plain question; backend receives area-prefixed version
         content,
         timestamp: new Date(),
       };
@@ -144,14 +424,26 @@ export default function Chat({
       updateMessages(convId, (prev) => [...prev, userMsg]);
       setLoading(true);
 
+      // #7: After COLD_START_DELAY_MS, show the warm-up hint while still loading
+      coldStartTimerRef.current = setTimeout(() => {
+        setShowColdStartHint(true);
+      }, COLD_START_DELAY_MS);
+
       try {
         const res = await fetch(`${API_URL}/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: content, history: historySnapshot }),
+          // Send area-prefixed content to the backend for RF-02 memory
+          body: JSON.stringify({ message: backendContent, history: historySnapshot }),
         });
 
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          // 5xx → likely cold-start or server-side failure
+          const isColdStart = res.status >= 500;
+          setLastErrorWasColdStart(isColdStart);
+          setPendingRetry(content);
+          throw new Error(`HTTP ${res.status}`);
+        }
 
         const data = await res.json();
 
@@ -165,15 +457,24 @@ export default function Chat({
         };
 
         updateMessages(convId, (prev) => [...prev, assistantMsg]);
-      } catch {
-        const errorMsg: Message = {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: "Hubo un error al conectar con el agente. Por favor, intentá de nuevo.",
-          timestamp: new Date(),
-        };
-        updateMessages(convId, (prev) => [...prev, errorMsg]);
+        setPendingRetry(null);
+      } catch (err) {
+        // Network errors (abort, no connection) → likely cold-start
+        const isNetworkError = !(err instanceof Error && err.message.startsWith("HTTP"));
+        // Always set the retry content so the ErrorBubble renders.
+        // isNetworkError → cold-start variant; HTTP 5xx was already set above in !res.ok block.
+        if (isNetworkError) {
+          setLastErrorWasColdStart(true);
+        }
+        // setPendingRetry always so the error bubble appears regardless of error type
+        setPendingRetry(content);
       } finally {
+        // Clear the cold-start timer and hide the hint once response is done
+        if (coldStartTimerRef.current) {
+          clearTimeout(coldStartTimerRef.current);
+          coldStartTimerRef.current = null;
+        }
+        setShowColdStartHint(false);
         setLoading(false);
       }
     },
@@ -186,6 +487,8 @@ export default function Chat({
       onResetRef.current = () => {
         clearActive();
         setLoading(false);
+        setPendingRetry(null);
+        setShowColdStartHint(false);
       };
     }
     return () => {
@@ -202,6 +505,13 @@ export default function Chat({
       if (onSendRef) onSendRef.current = null;
     };
   }, [onSendRef, sendMessage]);
+
+  // Clean up cold-start timer on unmount
+  useEffect(() => {
+    return () => {
+      if (coldStartTimerRef.current) clearTimeout(coldStartTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -222,9 +532,10 @@ export default function Chat({
         const heading = welcomeRef.current!.querySelector(".welcome-heading");
         const subtext = welcomeRef.current!.querySelector(".welcome-subtext");
         const label = welcomeRef.current!.querySelector(".welcome-label");
+        const areaSection = welcomeRef.current!.querySelector(".area-selector-section");
         const buttons = welcomeRef.current!.querySelectorAll(".welcome-btn");
 
-        const targets = [logo, heading, subtext, label, ...Array.from(buttons)].filter(Boolean);
+        const targets = [logo, heading, subtext, label, areaSection, ...Array.from(buttons)].filter(Boolean);
 
         gsap.fromTo(
           targets,
@@ -245,9 +556,34 @@ export default function Chat({
     { scope: welcomeRef, dependencies: [isEmpty] }
   );
 
+  // Animate suggested questions when selected area changes — #8
+  const questionsRef = useRef<HTMLDivElement>(null);
+  useGSAP(
+    () => {
+      if (!questionsRef.current || !selectedArea) return;
+      const mm = gsap.matchMedia();
+      mm.add("(prefers-reduced-motion: no-preference)", () => {
+        gsap.fromTo(
+          questionsRef.current!.querySelectorAll(".welcome-btn"),
+          { opacity: 0, y: 8 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.3,
+            ease: "power2.out",
+            stagger: 0.05,
+            clearProps: "transform",
+          }
+        );
+      });
+      return () => mm.revert();
+    },
+    { scope: questionsRef, dependencies: [selectedArea] }
+  );
+
   // Determine if the last message is from the assistant (to show follow-ups)
   const lastMsg = messages[messages.length - 1];
-  const showFollowUps = !loading && lastMsg?.role === "assistant";
+  const showFollowUps = !loading && !pendingRetry && lastMsg?.role === "assistant";
 
   // Don't render until localStorage has been read
   if (!mounted) {
@@ -279,14 +615,21 @@ export default function Chat({
                 </p>
               </div>
 
-              <div className="w-full max-w-md flex flex-col gap-2">
+              {/* Area selector — #8: shown once localStorage is read to avoid flash */}
+              {areaLoaded && (
+                <div className="area-selector-section w-full max-w-md">
+                  <AreaSelector selected={selectedArea} onSelect={handleAreaSelect} />
+                </div>
+              )}
+
+              <div className="w-full max-w-md flex flex-col gap-2" ref={questionsRef}>
                 <p
                   className="welcome-label text-xs font-medium uppercase tracking-widest mb-1"
                   style={{ color: "var(--muted)" }}
                 >
                   Preguntas frecuentes
                 </p>
-                {SUGGESTED_QUESTIONS.map((q) => (
+                {suggestedQuestions.map((q) => (
                   <button
                     key={q}
                     onClick={() => sendMessage(q)}
@@ -330,7 +673,15 @@ export default function Chat({
             })
           )}
 
-          {loading && <LoadingIndicator />}
+          {loading && <LoadingIndicator showColdStartHint={showColdStartHint} />}
+
+          {/* #7: Friendly error state with retry button — replaces generic error bubble */}
+          {!loading && pendingRetry && (
+            <ErrorBubble
+              isColdStart={lastErrorWasColdStart}
+              onRetry={() => sendMessage(pendingRetry)}
+            />
+          )}
 
           {/* Follow-up chips after last assistant answer */}
           {showFollowUps && (
