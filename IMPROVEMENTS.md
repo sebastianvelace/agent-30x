@@ -26,8 +26,11 @@ Tracking doc so work can resume across sessions. Each feature ends committed, te
 - [x] #4 Gap dashboard (GET /admin/gaps gated by INGEST_API_KEY + protected /gaps page)
 
 ### Phase C — Deep (hard, API-sensitive)
-- [ ] #1 Streaming responses (backend SSE + frontend incremental render; cache stores final text)
-- [ ] #6 Hybrid retrieval (keyword + semantic via Postgres FTS + vector, combined ranking)
+- [skip] #1 Streaming responses — user decided it's not needed for an onboarding tool
+- [x] #6 Hybrid retrieval (semantic + Spanish FTS via RRF). Supabase: run supabase_hybrid.sql.
+      Re-ingested at 250-token chunks → 14 chunks. Calibrated: entity/keyword queries
+      (e.g. HubSpot) now ground via keyword_hit; off-topic and out-of-doc questions still
+      escalate (correct per RF-03). Escalation = not(semantic>=floor OR keyword_hit).
 
 ## Status log
 - (start) Plan created, decisions locked, Doc3 content extracted.
