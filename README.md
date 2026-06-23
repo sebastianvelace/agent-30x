@@ -40,7 +40,7 @@ The system runs in two fully independent phases:
 Text extraction (pdfplumber)
     │
     ▼
-Semantic chunking (~500 tokens, 50-token overlap)
+Semantic chunking (~250 tokens, 30-token overlap)
     │
     ▼
 Voyage AI voyage-3 → vector embeddings
@@ -76,9 +76,9 @@ Claude Sonnet 4.6 → grounded response
 If no semantic match above threshold AND no keyword hit → escalate to Chief of Staff
 ```
 
-> **One-time Supabase setup for hybrid retrieval:** after running `supabase_setup.sql`,
-> also run `supabase_hybrid.sql` in the Supabase SQL Editor. This adds a Spanish FTS
-> column and the `hybrid_match_chunks` RPC used by the backend.
+> **One-time Supabase setup:** run the three SQL files in order — `supabase_setup.sql`,
+> `supabase_hybrid.sql` (run `set maintenance_work_mem='128MB';` first in the same session),
+> and `supabase_feedback.sql`. See the [Supabase — database setup](#supabase--database-setup) section for details.
 
 ### Full system diagram
 
@@ -94,16 +94,20 @@ If no semantic match above threshold AND no keyword hit → escalate to Chief of
 └──────────────────────────┬──────────────────────────────────┘
                            │ REST API
 ┌──────────────────────────▼──────────────────────────────────┐
-│               BACKEND — FastAPI / Railway                    │
+│               BACKEND — FastAPI / Render                     │
 │                                                             │
 │   POST /chat                                                │
 │   ├── Voyage AI  → message embedding                        │
-│   ├── Supabase   → similarity search (top-5 chunks)         │
+│   ├── Supabase   → hybrid retrieval (top-5 chunks)          │
+│   │     ├── Semantic: cosine similarity (voyage-3)          │
+│   │     └── Full-text: Spanish keyword search (FTS + RRF)   │
 │   ├── Build prompt with context + history                   │
 │   └── Claude Sonnet → response                              │
 │                                                             │
-│   POST /ingest   (internal use only, protected by API key)  │
-│   └── PDF ingestion pipeline                                │
+│   POST /ingest   (protected by X-Api-Key)                   │
+│   POST /feedback                                            │
+│   GET  /admin/gaps  (protected by X-Api-Key)                │
+│   GET  /health                                              │
 └────────────┬─────────────────────────┬──────────────────────┘
              │                         │
 ┌────────────▼──────────┐  ┌───────────▼──────────────────────┐
@@ -128,8 +132,8 @@ If no semantic match above threshold AND no keyword hit → escalate to Chief of
 | Embeddings | Voyage AI `voyage-3` | Anthropic's recommended embedding provider (Anthropic acquired Voyage in 2024 but they remain separate services with separate SDKs and keys); strong MTEB retrieval performance for Spanish content |
 | Vector store | Supabase pgvector | Standard PostgreSQL with vector extension — no vendor lock-in, plain SQL for inspection and debugging |
 | Backend | FastAPI (Python) | Typed, native async, automatic OpenAPI docs |
-| Frontend | Next.js 15 + Tailwind CSS | App Router, RSC, native Vercel deploy |
-| Backend deploy | Railway | CD from GitHub, environment variables in UI, sufficient free tier |
+| Frontend | Next.js 16 + Tailwind CSS | App Router, RSC, Turbopack dev server, native Vercel deploy |
+| Backend deploy | Render | CD from GitHub, environment variables in dashboard, free tier (note: ~50s cold start after idle) |
 | Frontend deploy | Vercel | CD from GitHub, edge network, zero config |
 
 ---
@@ -139,7 +143,7 @@ If no semantic match above threshold AND no keyword hit → escalate to Chief of
 - Python 3.11+
 - Node.js 20+
 - [Supabase](https://supabase.com) account (free tier) — you'll need the project URL and `service_role` key
-- [Railway](https://railway.app) account (free tier)
+- [Render](https://render.com) account (free tier)
 - [Vercel](https://vercel.com) account (free tier)
 - Anthropic API key for Claude ([console.anthropic.com](https://console.anthropic.com))
 - Voyage AI API key for embeddings ([dash.voyageai.com](https://dash.voyageai.com), free tier) — separate service and key from Anthropic
@@ -194,6 +198,11 @@ INGEST_API_KEY=any-secret-string-to-protect-the-ingest-endpoint
 # Agent configuration
 SIMILARITY_THRESHOLD=0.4   # tuned for voyage-3 (cosine scores run low, ~0.24-0.60)
 TOP_K_CHUNKS=5
+
+# Hybrid retrieval weights (optional — defaults shown)
+FULL_TEXT_WEIGHT=1.0       # weight of Spanish full-text search in RRF fusion
+SEMANTIC_WEIGHT=1.0        # weight of semantic (vector cosine) search in RRF fusion
+RRF_K=50                   # RRF constant; higher = smoother rank blending
 ```
 
 > **On the threshold:** voyage-3 produces lower absolute cosine scores than some other embedding models, so a `0.4` threshold — not the more intuitive `0.75` — is what correctly grounds real onboarding questions while still escalating off-topic ones. Re-tune this after ingesting a larger document set.
@@ -201,59 +210,17 @@ TOP_K_CHUNKS=5
 ### Frontend (`frontend/.env.local`)
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:8000   # In production: Railway public URL
+NEXT_PUBLIC_API_URL=http://localhost:8000           # In production: Render service URL
+NEXT_PUBLIC_CHIEF_OF_STAFF_EMAIL=example@30x.com   # Pre-fills the escalation mailto link
 ```
 
-### Supabase — vector table setup
+### Supabase — database setup
 
-Run this SQL in your Supabase project's SQL Editor:
+Run the three SQL files in order in your Supabase project's SQL Editor:
 
-```sql
--- Enable pgvector extension
-create extension if not exists vector;
-
--- Chunks table
-create table chunks (
-  id          uuid primary key default gen_random_uuid(),
-  content     text not null,
-  embedding   vector(1024),          -- voyage-3 dimensions
-  source_doc  text not null,
-  metadata    jsonb default '{}',
-  created_at  timestamptz default now()
-);
-
--- Index for cosine similarity search
-create index on chunks
-using ivfflat (embedding vector_cosine_ops)
-with (lists = 100);
-
--- Semantic search function
-create or replace function match_chunks(
-  query_embedding vector(1024),
-  match_threshold float,
-  match_count     int
-)
-returns table (
-  id         uuid,
-  content    text,
-  source_doc text,
-  metadata   jsonb,
-  similarity float
-)
-language sql stable
-as $$
-  select
-    id,
-    content,
-    source_doc,
-    metadata,
-    1 - (embedding <=> query_embedding) as similarity
-  from chunks
-  where 1 - (embedding <=> query_embedding) > match_threshold
-  order by embedding <=> query_embedding
-  limit match_count;
-$$;
-```
+1. **`supabase_setup.sql`** — creates the `chunks` table, ivfflat index, and `match_chunks` (semantic search) RPC.
+2. **`supabase_hybrid.sql`** — adds the Spanish FTS column (`fts tsvector`), a GIN index on it, and the `hybrid_match_chunks` RPC used by the backend. Before running, execute `set maintenance_work_mem='128MB';` in the same session to speed up the GIN index build.
+3. **`supabase_feedback.sql`** — creates the `feedback` table and `knowledge_gaps` view used by `POST /feedback` and `GET /admin/gaps`.
 
 ---
 
@@ -270,21 +237,20 @@ python -m scripts.ingest --docs-path ../docs/
 The script runs this pipeline for each PDF:
 
 1. Extracts text with `pdfplumber`
-2. Splits into ~500-token chunks with 50-token overlap (prevents cutting context at chunk boundaries)
+2. Splits into ~250-token chunks with 30-token overlap (smaller chunks improve retrieval granularity and citation precision)
 3. Generates embeddings with Voyage AI `voyage-3` in batches of 50 to respect rate limits
-4. Upserts into Supabase using `source_doc` + content hash as idempotency key
+4. Inserts into Supabase (use `--replace` or `--reset` flags to avoid duplicates on re-ingestion)
 
 Expected output:
 
 ```
 [ingest] Processing: 30X_Doc1_Organizacion.pdf
-[ingest]   → 24 chunks generated
-[ingest]   → embeddings generated (batch 1/1)
-[ingest]   → upserted to Supabase: 24 chunks
+[ingest]   → 6 chunks generated
+[ingest] batch 1: 6 chunks stored
 [ingest] Processing: 30X_Doc2_Programas_Operacion.pdf
-[ingest]   → 31 chunks generated
+[ingest]   → 5 chunks generated
 ...
-[ingest] ✓ Ingestion complete: 78 total chunks
+[ingest] ✓ Ingestion complete
 ```
 
 ---
@@ -315,20 +281,26 @@ Frontend available at `http://localhost:3000`
 
 ## Production deploy
 
-### Backend → Railway
+### Backend → Render
 
-1. Connect your GitHub repository at [railway.app](https://railway.app)
-2. Select the `backend/` folder as the service root
-3. Railway auto-detects the `Procfile` or `Dockerfile`
-4. Add environment variables from the Railway dashboard
-5. Deploy triggers automatically on every push to `main`
+1. Create a new **Web Service** at [render.com](https://render.com)
+2. Connect your GitHub repository
+3. Set **Root Directory** to `backend`
+4. **Build command:** `pip install -r requirements.txt`
+5. **Start command:** `uvicorn api.main:app --host 0.0.0.0 --port $PORT`
+6. Choose the **Free** instance type
+7. Add environment variables (all keys from the Backend section above) in the Render dashboard
+8. Deploy triggers automatically on every push to `main`
+
+> **Cold start:** the Render free tier spins down after ~15 min of inactivity. The first request after idle takes ~50s to wake up. Subsequent requests are fast.
 
 ### Frontend → Vercel
 
 1. Import the repository at [vercel.com](https://vercel.com)
 2. Set the root directory to `frontend/`
-3. Add `NEXT_PUBLIC_API_URL` with the Railway public URL
-4. Deploy triggers automatically on every push to `main`
+3. Add `NEXT_PUBLIC_API_URL` pointing to your Render service URL (e.g. `https://agent-30x.onrender.com`)
+4. Optionally add `NEXT_PUBLIC_CHIEF_OF_STAFF_EMAIL` for the escalation mailto link
+5. Deploy triggers automatically on every push to `main`
 
 ---
 
@@ -412,37 +384,53 @@ agent-30x/
 │   │   ├── main.py          # FastAPI app, CORS, routers
 │   │   ├── routes/
 │   │   │   ├── chat.py      # POST /chat
-│   │   │   └── ingest.py    # POST /ingest (protected)
+│   │   │   ├── ingest.py    # POST /ingest (protected by X-Api-Key)
+│   │   │   ├── feedback.py  # POST /feedback (thumbs up/down logging)
+│   │   │   └── admin.py     # GET /admin/gaps (protected by X-Api-Key)
 │   │   └── models.py        # Pydantic schemas
 │   ├── agent/
-│   │   ├── retriever.py     # Supabase pgvector search
-│   │   ├── llm.py           # Claude client + prompt construction
+│   │   ├── retriever.py     # Hybrid retrieval (semantic + Spanish FTS via RRF)
+│   │   ├── llm.py           # Claude client, query cache, escalation logic
 │   │   └── prompts.py       # Agent system prompt
 │   ├── ingestion/
-│   │   ├── parser.py        # PDF text extraction
-│   │   ├── chunker.py       # Chunking with overlap
-│   │   └── embedder.py      # Voyage AI embeddings
+│   │   ├── parser.py        # PDF text extraction (pdfplumber)
+│   │   ├── chunker.py       # 250-token chunks with 30-token overlap
+│   │   └── embedder.py      # Voyage AI voyage-3 embeddings + Supabase insert
 │   ├── scripts/
-│   │   └── ingest.py        # Ingestion CLI
+│   │   └── ingest.py        # Ingestion CLI (--file, --replace, --reset)
+│   ├── tests/
+│   │   ├── test_citations_mocked.py    # Citation structure tests (mocked)
+│   │   └── test_hybrid_escalation.py  # Escalation logic tests (mocked)
 │   ├── requirements.txt
-│   └── Procfile             # Railway: web: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+│   ├── requirements-dev.txt  # Test dependencies (pytest)
+│   └── Procfile             # Render: web: uvicorn api.main:app --host 0.0.0.0 --port $PORT
 ├── frontend/
 │   ├── public/                 # 30X logo assets (theme-aware wordmark + favicon)
 │   └── src/
 │       ├── app/
-│       │   ├── page.tsx        # Main chat page + header
+│       │   ├── page.tsx        # Main chat page + sidebar
+│       │   ├── gaps/
+│       │   │   └── page.tsx    # Admin gap dashboard (key-protected)
 │       │   ├── layout.tsx      # Root layout, ThemeProvider, fonts, metadata
 │       │   └── globals.css     # Theme variables (dark/light) + markdown styles
 │       ├── components/
-│       │   ├── Chat.tsx        # Chat state, history, suggested questions
-│       │   ├── Message.tsx     # Message bubble, markdown render, copy, sources
+│       │   ├── Chat.tsx        # Chat state, history, feedback, suggested questions
+│       │   ├── Message.tsx     # Message bubble, markdown render, copy, sources, citations
 │       │   ├── Input.tsx       # Auto-growing input with send
 │       │   ├── Logo.tsx        # Theme-aware 30X wordmark
-│       │   └── ThemeToggle.tsx # Light/dark switch (next-themes)
+│       │   ├── ThemeToggle.tsx # Light/dark switch (next-themes)
+│       │   ├── IntroHero.tsx   # Welcome screen (shown once per session)
+│       │   ├── KnowledgePanel.tsx  # Drawer: knowledge base browser
+│       │   └── FirstWeekPanel.tsx  # Drawer: interactive first-week checklist
+│       ├── hooks/
+│       │   └── useChatHistory.ts  # localStorage conversation history hook
 │       └── types/
-│           └── chat.ts         # Shared message types
+│           └── chat.ts         # Shared message + citation types
 ├── docs/                    # Knowledge base PDFs (gitignored — internal 30X documents)
-├── supabase_setup.sql       # Run once in Supabase SQL Editor
+├── supabase_setup.sql       # Step 1: chunks table + match_chunks RPC
+├── supabase_hybrid.sql      # Step 2: FTS column + hybrid_match_chunks RPC
+├── supabase_feedback.sql    # Step 3: feedback table + knowledge_gaps view
+├── IMPROVEMENTS.md          # Implemented improvements log
 ├── DEVELOPMENT_LOG.md       # Problems faced during the build and how they were solved
 └── README.md
 ```
