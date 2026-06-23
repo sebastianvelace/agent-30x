@@ -22,13 +22,14 @@ from ingestion.chunker import chunk_text
 from ingestion.embedder import embed_and_store, _supabase
 
 
-def ingest_file(pdf_path: Path) -> None:
+def ingest_file(pdf_path: Path) -> int:
     print(f"[ingest] Processing: {pdf_path.name}")
     text = extract_text(str(pdf_path))
     chunks = chunk_text(text, source_doc=pdf_path.name)
     print(f"[ingest]   → {len(chunks)} chunks generated")
     stored = embed_and_store(chunks)
     print(f"[ingest]   → {stored} chunks stored in Supabase")
+    return stored
 
 
 def delete_doc(filename: str) -> None:
@@ -75,9 +76,9 @@ def main():
 
     total_chunks = 0
     for pdf in pdfs:
-        ingest_file(pdf)
+        total_chunks += ingest_file(pdf)
 
-    print(f"[ingest] ✓ Ingestion complete")
+    print(f"[ingest] ✓ Ingestion complete: {total_chunks} chunks across {len(pdfs)} files")
 
 
 if __name__ == "__main__":

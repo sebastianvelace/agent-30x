@@ -17,11 +17,8 @@ def verify_key(x_api_key: str = Header(default=None)):
 
 
 @router.post("/ingest", dependencies=[Depends(verify_key)])
-async def ingest(
-    file: UploadFile = File(...),
-    x_api_key: str = Header(default=None),
-):
-
+async def ingest(file: UploadFile = File(...)):
+    # Auth is enforced by the verify_key dependency above.
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are accepted")
 

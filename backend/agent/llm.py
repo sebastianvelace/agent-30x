@@ -18,7 +18,7 @@ def _claude() -> anthropic.Anthropic:
 
 
 # ---------------------------------------------------------------------------
-# Query cache — single-instance optimization (Railway free tier: 1 dyno).
+# Query cache — single-instance optimization (Render free tier: 1 instance).
 # We cache ONLY stateless first-turn questions (empty history) because those
 # share no user-specific context and are the dominant repeated case for new
 # hires asking the same onboarding questions.
