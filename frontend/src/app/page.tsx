@@ -1,4 +1,5 @@
 import Chat from "@/components/Chat";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default function Home() {
   return (
@@ -18,14 +19,17 @@ export default function Home() {
             Onboarding Agent
           </span>
         </div>
-        <div className="flex items-center gap-2">
-          <span
-            className="w-2 h-2 rounded-full"
-            style={{ backgroundColor: "var(--accent)" }}
-          />
-          <span className="text-xs" style={{ color: "var(--muted)" }}>
-            Online
-          </span>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span
+              className="w-2 h-2 rounded-full"
+              style={{ backgroundColor: "var(--accent)" }}
+            />
+            <span className="text-xs" style={{ color: "var(--muted)" }}>
+              Online
+            </span>
+          </div>
+          <ThemeToggle />
         </div>
       </header>
 

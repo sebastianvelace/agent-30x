@@ -1,10 +1,23 @@
 "use client";
 
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { Message } from "@/types/chat";
+import type { Components } from "react-markdown";
 
 interface Props {
   message: Message;
 }
+
+// Custom components to inject brand-aware styles
+const markdownComponents: Components = {
+  // Wrap tables so they can scroll horizontally on narrow widths
+  table: ({ children, ...props }) => (
+    <div className="table-wrapper">
+      <table {...props}>{children}</table>
+    </div>
+  ),
+};
 
 export default function MessageBubble({ message }: Props) {
   const isUser = message.role === "user";
@@ -37,12 +50,25 @@ export default function MessageBubble({ message }: Props) {
               : { backgroundColor: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }
           }
         >
-          {message.content.split("\n").map((line, i) => (
-            <span key={i}>
-              {line}
-              {i < message.content.split("\n").length - 1 && <br />}
-            </span>
-          ))}
+          {isUser ? (
+            // User messages: plain text (no markdown)
+            message.content.split("\n").map((line, i, arr) => (
+              <span key={i}>
+                {line}
+                {i < arr.length - 1 && <br />}
+              </span>
+            ))
+          ) : (
+            // Assistant messages: render GFM markdown
+            <div className="markdown-body">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={markdownComponents}
+              >
+                {message.content}
+              </ReactMarkdown>
+            </div>
+          )}
         </div>
 
         {message.escalate && (
