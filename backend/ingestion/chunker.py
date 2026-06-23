@@ -1,7 +1,10 @@
 import tiktoken
 
-CHUNK_SIZE = 500
-CHUNK_OVERLAP = 50
+# Finer chunks improve retrieval granularity and citation precision:
+# smaller units surface the exact passage that answers a question rather
+# than a broad section that only partially matches.
+CHUNK_SIZE = 250
+CHUNK_OVERLAP = 30
 
 enc = tiktoken.get_encoding("cl100k_base")
 
