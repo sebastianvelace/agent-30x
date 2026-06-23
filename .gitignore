@@ -28,3 +28,5 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+# ATL skill registry cache — local tooling, not part of the deliverable
+.atl/
