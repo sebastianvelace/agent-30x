@@ -85,18 +85,31 @@ def chat(message: str, history: list[Message]) -> dict:
 
     # --- Retrieval ---
     chunks = retrieve_chunks(message)
-    context, sources = build_context(chunks)
-    escalate = len(chunks) == 0
 
-    # Build citations from retrieved chunks (preserves order, one entry per chunk)
-    citations = [
-        {
-            "source_doc": c["source_doc"],
-            "content": c["content"],
-            "similarity": c["similarity"],
-        }
-        for c in chunks
-    ]
+    # Escalation rule: answer if EITHER a semantic match above the similarity
+    # floor OR a keyword hit exists; escalate only if neither condition is met.
+    floor = float(os.getenv("SIMILARITY_THRESHOLD", "0.4"))
+    has_semantic = any(c["similarity"] >= floor for c in chunks)
+    has_keyword = any(c.get("keyword_hit") for c in chunks)
+    escalate = not (has_semantic or has_keyword)
+
+    if escalate:
+        # No grounding signal — pass empty context so Claude doesn't hallucinate
+        # from weak chunks; citations are empty.
+        context = ""
+        sources: list[str] = []
+        citations: list[dict] = []
+    else:
+        context, sources = build_context(chunks)
+        # Build citations from retrieved chunks (preserves order, one entry per chunk)
+        citations = [
+            {
+                "source_doc": c["source_doc"],
+                "content": c["content"],
+                "similarity": c["similarity"],
+            }
+            for c in chunks
+        ]
 
     system = SYSTEM_PROMPT.format(
         context=context if context else "No relevant information found in the documents for this query."

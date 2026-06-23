@@ -27,20 +27,26 @@ def embed_query(text: str) -> list[float]:
 
 
 def retrieve_chunks(query: str) -> list[dict]:
-    # voyage-3 cosine top-scores on this corpus run ~0.24-0.60, so the default
-    # is tuned to 0.4: low enough to ground real onboarding questions, high
-    # enough to still escalate off-topic ones. Override via env for larger corpora.
-    threshold = float(os.getenv("SIMILARITY_THRESHOLD", "0.4"))
+    # Hybrid retrieval: combines semantic (vector cosine) and Spanish full-text
+    # search via Reciprocal Rank Fusion (RRF). Escalation threshold is applied
+    # in Python (llm.py) after retrieval, not here — the RPC returns top-k
+    # regardless so the caller can decide based on similarity + keyword_hit.
     top_k = int(os.getenv("TOP_K_CHUNKS", "5"))
+    full_text_weight = float(os.getenv("FULL_TEXT_WEIGHT", "1.0"))
+    semantic_weight = float(os.getenv("SEMANTIC_WEIGHT", "1.0"))
+    rrf_k = int(os.getenv("RRF_K", "50"))
 
     embedding = embed_query(query)
 
     result = _supabase().rpc(
-        "match_chunks",
+        "hybrid_match_chunks",
         {
+            "query_text": query,
             "query_embedding": embedding,
-            "match_threshold": threshold,
             "match_count": top_k,
+            "full_text_weight": full_text_weight,
+            "semantic_weight": semantic_weight,
+            "rrf_k": rrf_k,
         },
     ).execute()
 

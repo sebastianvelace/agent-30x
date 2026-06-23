@@ -58,7 +58,10 @@ User message
 Voyage AI → message embedding
     │
     ▼
-Supabase pgvector → cosine similarity search (top-5 chunks)
+Supabase pgvector → hybrid retrieval (top-5 chunks)
+  ├── Semantic: cosine similarity (voyage-3 embeddings)
+  └── Full-text: Spanish keyword search (tsvector GIN index)
+       Combined via Reciprocal Rank Fusion (RRF)
     │
     ▼
 Prompt construction:
@@ -70,8 +73,12 @@ Prompt construction:
 Claude Sonnet 4.6 → grounded response
     │
     ▼
-If similarity score < threshold → escalate to Chief of Staff
+If no semantic match above threshold AND no keyword hit → escalate to Chief of Staff
 ```
+
+> **One-time Supabase setup for hybrid retrieval:** after running `supabase_setup.sql`,
+> also run `supabase_hybrid.sql` in the Supabase SQL Editor. This adds a Spanish FTS
+> column and the `hybrid_match_chunks` RPC used by the backend.
 
 ### Full system diagram
 
