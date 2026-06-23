@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import ReactMarkdown from "react-markdown";
@@ -10,8 +10,12 @@ import type { Components } from "react-markdown";
 
 gsap.registerPlugin(useGSAP);
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
 interface Props {
   message: Message;
+  /** The user message that immediately preceded this assistant message (for feedback) */
+  precedingQuestion?: string;
 }
 
 // Custom components to inject brand-aware styles
@@ -82,9 +86,128 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-export default function MessageBubble({ message }: Props) {
+type FeedbackRating = "up" | "down" | null;
+
+function FeedbackButtons({
+  question,
+  escalated,
+  sources,
+}: {
+  question: string;
+  escalated: boolean;
+  sources: string[];
+}) {
+  const [rating, setRating] = useState<FeedbackRating>(null);
+
+  const postFeedback = async (r: FeedbackRating) => {
+    try {
+      await fetch(`${API_URL}/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question,
+          rating: r,
+          escalated,
+          sources,
+        }),
+      });
+    } catch {
+      // Silently ignore network errors
+    }
+  };
+
+  const handleRating = (r: "up" | "down") => {
+    const next = rating === r ? null : r;
+    setRating(next);
+    postFeedback(next);
+  };
+
+  return (
+    <div
+      className="flex items-center gap-0.5 opacity-0 group-hover/bubble:opacity-100 focus-within:opacity-100 transition-opacity duration-150"
+      aria-label="¿Te sirvió?"
+      title="¿Te sirvió?"
+    >
+      <button
+        onClick={() => handleRating("up")}
+        aria-label="Útil"
+        title="Útil"
+        className="rounded p-1 transition-colors"
+        style={{ color: rating === "up" ? "var(--accent)" : "var(--muted)" }}
+      >
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill={rating === "up" ? "currentColor" : "none"}
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z" />
+          <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+        </svg>
+      </button>
+      <button
+        onClick={() => handleRating("down")}
+        aria-label="No útil"
+        title="No útil"
+        className="rounded p-1 transition-colors"
+        style={{ color: rating === "down" ? "#ff6b6b" : "var(--muted)" }}
+      >
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill={rating === "down" ? "currentColor" : "none"}
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10z" />
+          <path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+/** Posts escalation feedback once; guards via a ref so it only fires once per mount. */
+function useAutoEscalationFeedback(
+  message: Message,
+  precedingQuestion: string
+) {
+  const sentRef = useRef(false);
+
+  useEffect(() => {
+    if (!message.escalate || sentRef.current) return;
+    sentRef.current = true;
+
+    fetch(`${API_URL}/feedback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question: precedingQuestion,
+        rating: null,
+        escalated: true,
+        sources: message.sources ?? [],
+      }),
+    }).catch(() => {
+      // Silently ignore
+    });
+  }, [message, precedingQuestion]);
+}
+
+export default function MessageBubble({ message, precedingQuestion = "" }: Props) {
   const isUser = message.role === "user";
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-post escalation feedback once when escalate === true
+  useAutoEscalationFeedback(message, precedingQuestion);
 
   // Entrance animation — slide up + fade in
   useGSAP(
@@ -169,10 +292,15 @@ export default function MessageBubble({ message }: Props) {
             )}
           </div>
 
-          {/* Copy button — visible on hover/focus, for assistant messages only */}
+          {/* Action buttons — visible on hover/focus, for assistant messages only */}
           {!isUser && (
-            <div className="flex-shrink-0 mt-1">
+            <div className="flex-shrink-0 mt-1 flex flex-col gap-0.5">
               <CopyButton text={message.content} />
+              <FeedbackButtons
+                question={precedingQuestion}
+                escalated={message.escalate ?? false}
+                sources={message.sources ?? []}
+              />
             </div>
           )}
         </div>
