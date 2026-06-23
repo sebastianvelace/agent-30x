@@ -12,9 +12,13 @@ gsap.registerPlugin(useGSAP);
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+// #2: Chief of Staff contact — reads from env var with a safe fallback
+const CHIEF_OF_STAFF_EMAIL =
+  process.env.NEXT_PUBLIC_CHIEF_OF_STAFF_EMAIL ?? "chief-of-staff@30x.com";
+
 interface Props {
   message: Message;
-  /** The user message that immediately preceded this assistant message (for feedback) */
+  /** The user message that immediately preceded this assistant message (for feedback and escalation) */
   precedingQuestion?: string;
 }
 
@@ -202,6 +206,128 @@ function useAutoEscalationFeedback(
   }, [message, precedingQuestion]);
 }
 
+// ── EscalationCTA ───────────────────────────────────────────────────────────
+// Shown when escalate === true on an assistant message — #2.
+// Provides a mailto: button and a clipboard fallback.
+function EscalationCTA({ question }: { question: string }) {
+  const [messageCopied, setMessageCopied] = useState(false);
+
+  const subject = encodeURIComponent("Pregunta de onboarding");
+  const body = encodeURIComponent(
+    `Hola,\n\nTengo una pregunta sobre el onboarding que el agente no pudo responder completamente:\n\n"${question}"\n\n¿Me podés ayudar?\n\nGracias.`
+  );
+  const mailtoHref = `mailto:${CHIEF_OF_STAFF_EMAIL}?subject=${subject}&body=${body}`;
+
+  const prefillText = `Para: ${CHIEF_OF_STAFF_EMAIL}\nAsunto: Pregunta de onboarding\n\nHola,\n\nTengo una pregunta sobre el onboarding que el agente no pudo responder completamente:\n\n"${question}"\n\n¿Me podés ayudar?\n\nGracias.`;
+
+  const handleCopyMessage = async () => {
+    try {
+      await navigator.clipboard.writeText(prefillText);
+      setMessageCopied(true);
+      setTimeout(() => setMessageCopied(false), 2000);
+    } catch {
+      // Clipboard API unavailable — silent fail
+    }
+  };
+
+  return (
+    <div
+      className="flex flex-col gap-2 px-3 py-3 rounded-xl"
+      style={{
+        backgroundColor: "color-mix(in srgb, var(--accent) 8%, transparent)",
+        border: "1px solid color-mix(in srgb, var(--accent) 30%, transparent)",
+      }}
+      role="region"
+      aria-label="Escalación al Chief of Staff"
+    >
+      <p className="text-xs leading-snug" style={{ color: "var(--text)" }}>
+        Esta pregunta puede requerir atención directa del equipo.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {/* Primary: mailto link — #2 */}
+        <a
+          href={mailtoHref}
+          aria-label={`Escribir al Chief of Staff sobre tu pregunta de onboarding — abre tu cliente de correo`}
+          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] hover:opacity-90"
+          style={{
+            backgroundColor: "var(--accent)",
+            color: "#0a0a0a",
+            textDecoration: "none",
+          }}
+        >
+          {/* Mail icon */}
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+            <polyline points="22,6 12,13 2,6" />
+          </svg>
+          Escribir al Chief of Staff
+        </a>
+
+        {/* Fallback: copy prefilled text — #2 */}
+        <button
+          onClick={handleCopyMessage}
+          aria-label={messageCopied ? "Mensaje copiado al portapapeles" : "Copiar mensaje prefabricado para enviarlo manualmente"}
+          title="Copiar mensaje (por si no abre el correo automáticamente)"
+          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+          style={{
+            backgroundColor: "var(--surface)",
+            border: "1px solid var(--border)",
+            color: "var(--muted)",
+          }}
+        >
+          {messageCopied ? (
+            <>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                style={{ color: "var(--accent)" }}
+              >
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              ¡Copiado!
+            </>
+          ) : (
+            <>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+              Copiar mensaje
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function MessageBubble({ message, precedingQuestion = "" }: Props) {
   const isUser = message.role === "user";
   const containerRef = useRef<HTMLDivElement>(null);
@@ -305,13 +431,9 @@ export default function MessageBubble({ message, precedingQuestion = "" }: Props
           )}
         </div>
 
+        {/* #2: Escalation CTA — replaces the plain "Escalated" badge */}
         {message.escalate && (
-          <div
-            className="text-xs px-3 py-1 rounded-full"
-            style={{ backgroundColor: "#1a1a00", color: "var(--accent)", border: "1px solid #c8ff0040" }}
-          >
-            Escalated to Chief of Staff
-          </div>
+          <EscalationCTA question={precedingQuestion} />
         )}
 
         {message.sources && message.sources.length > 0 && (
