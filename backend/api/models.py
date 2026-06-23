@@ -12,10 +12,17 @@ class ChatRequest(BaseModel):
     history: list[Message] = []
 
 
+class Citation(BaseModel):
+    source_doc: str
+    content: str
+    similarity: float
+
+
 class ChatResponse(BaseModel):
     response: str
     escalate: bool = False
     sources: list[str] = []
+    citations: list[Citation] = []
 
 
 class FeedbackRequest(BaseModel):

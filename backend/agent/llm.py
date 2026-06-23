@@ -88,6 +88,16 @@ def chat(message: str, history: list[Message]) -> dict:
     context, sources = build_context(chunks)
     escalate = len(chunks) == 0
 
+    # Build citations from retrieved chunks (preserves order, one entry per chunk)
+    citations = [
+        {
+            "source_doc": c["source_doc"],
+            "content": c["content"],
+            "similarity": c["similarity"],
+        }
+        for c in chunks
+    ]
+
     system = SYSTEM_PROMPT.format(
         context=context if context else "No relevant information found in the documents for this query."
     )
@@ -118,6 +128,7 @@ def chat(message: str, history: list[Message]) -> dict:
         "response": response.content[0].text,
         "escalate": escalate,
         "sources": sources,
+        "citations": citations,
     }
 
     # --- Cache store (stateless questions only) ---
