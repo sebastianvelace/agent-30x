@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Literal
 
 
 class Message(BaseModel):
@@ -16,3 +16,14 @@ class ChatResponse(BaseModel):
     response: str
     escalate: bool = False
     sources: list[str] = []
+
+
+class FeedbackRequest(BaseModel):
+    question: str
+    rating: Optional[Literal["up", "down"]] = None
+    escalated: bool = False
+    sources: list[str] = []
+
+
+class FeedbackResponse(BaseModel):
+    status: str  # "ok" | "skipped"
