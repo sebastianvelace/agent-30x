@@ -4,7 +4,9 @@ Conversational onboarding agent for 30X — answers questions from new team memb
 
 Built with RAG (Retrieval-Augmented Generation) on 30X internal documents, Claude Sonnet as the LLM, Voyage AI for semantic embeddings, and Supabase pgvector as the vector store.
 
-> **Live demo:** [add Vercel URL here]
+> **Live demo:** https://agent-30x.vercel.app
+>
+> Backend API: https://agent-30x.onrender.com (Render free tier — the first request after idle may take ~50s to wake up).
 
 ---
 
