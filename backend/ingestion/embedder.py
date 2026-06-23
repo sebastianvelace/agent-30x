@@ -12,8 +12,9 @@ def _supabase() -> Client:
 
 @lru_cache(maxsize=1)
 def _voyage() -> voyageai.Client:
-    # Voyage AI requires its own API key (get one at https://dash.voyageai.com)
-    return voyageai.Client(api_key=os.environ["VOYAGE_API_KEY"])
+    # Voyage AI requires its own API key (get one at https://dash.voyageai.com).
+    # max_retries rides out transient rate-limit/5xx responses (e.g. free-tier 3 RPM).
+    return voyageai.Client(api_key=os.environ["VOYAGE_API_KEY"], max_retries=5)
 
 BATCH_SIZE = 50
 

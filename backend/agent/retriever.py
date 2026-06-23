@@ -11,7 +11,9 @@ def _supabase() -> Client:
 
 @lru_cache(maxsize=1)
 def _voyage() -> voyageai.Client:
-    return voyageai.Client(api_key=os.environ["VOYAGE_API_KEY"])
+    # max_retries makes the client ride out transient rate-limit/5xx responses
+    # (e.g. Voyage free-tier 3 RPM) with backoff instead of bubbling a 500.
+    return voyageai.Client(api_key=os.environ["VOYAGE_API_KEY"], max_retries=5)
 
 
 def embed_query(text: str) -> list[float]:
