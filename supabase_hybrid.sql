@@ -14,6 +14,15 @@
 --   A higher k de-emphasizes the rank difference between top results.
 
 -- ---------------------------------------------------------------------------
+-- 0. Raise maintenance memory for this session.
+--    Adding a STORED generated column rewrites the table, which rebuilds the
+--    ivfflat vector index — that needs ~41 MB, above the Supabase free-tier
+--    default of 32 MB. This bump is session-scoped and safe.
+-- ---------------------------------------------------------------------------
+
+set maintenance_work_mem = '128MB';
+
+-- ---------------------------------------------------------------------------
 -- 1. FTS column + index (idempotent)
 -- ---------------------------------------------------------------------------
 
