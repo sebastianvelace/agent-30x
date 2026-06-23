@@ -27,7 +27,10 @@ def embed_query(text: str) -> list[float]:
 
 
 def retrieve_chunks(query: str) -> list[dict]:
-    threshold = float(os.getenv("SIMILARITY_THRESHOLD", "0.75"))
+    # voyage-3 cosine top-scores on this corpus run ~0.24-0.60, so the default
+    # is tuned to 0.4: low enough to ground real onboarding questions, high
+    # enough to still escalate off-topic ones. Override via env for larger corpora.
+    threshold = float(os.getenv("SIMILARITY_THRESHOLD", "0.4"))
     top_k = int(os.getenv("TOP_K_CHUNKS", "5"))
 
     embedding = embed_query(query)

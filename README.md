@@ -183,9 +183,11 @@ SUPABASE_SERVICE_KEY=eyJ...          # use service_role key, not anon
 INGEST_API_KEY=any-secret-string-to-protect-the-ingest-endpoint
 
 # Agent configuration
-SIMILARITY_THRESHOLD=0.75
+SIMILARITY_THRESHOLD=0.4   # tuned for voyage-3 (cosine scores run low, ~0.24-0.60)
 TOP_K_CHUNKS=5
 ```
+
+> **On the threshold:** voyage-3 produces lower absolute cosine scores than some other embedding models, so a `0.4` threshold — not the more intuitive `0.75` — is what correctly grounds real onboarding questions while still escalating off-topic ones. Re-tune this after ingesting a larger document set.
 
 ### Frontend (`frontend/.env.local`)
 
