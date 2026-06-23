@@ -11,6 +11,9 @@ const geistSans = Geist({
 export const metadata: Metadata = {
   title: "30X — Onboarding Agent",
   description: "Your first point of contact at 30X. Ask anything about the organization.",
+  icons: {
+    icon: "/30x-icon.png",
+  },
 };
 
 export default function RootLayout({
