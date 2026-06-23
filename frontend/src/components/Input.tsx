@@ -37,8 +37,12 @@ export default function ChatInput({ onSend, disabled }: Props) {
 
   return (
     <div
-      className="flex items-end gap-3 rounded-2xl px-4 py-3"
-      style={{ backgroundColor: "var(--surface)", border: "1px solid var(--border)" }}
+      className="flex items-end gap-3 rounded-2xl px-4 py-3 transition-all duration-200 focus-within:border-[var(--accent)]"
+      style={{
+        backgroundColor: "var(--surface)",
+        border: "1px solid var(--border)",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.15)",
+      }}
     >
       <textarea
         ref={textareaRef}
