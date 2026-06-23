@@ -35,8 +35,18 @@ const FOLLOW_UPS = [
 ];
 
 interface Props {
+  /** Imperative ref: calling it resets (clears active conversation). */
   onResetRef?: React.MutableRefObject<(() => void) | null>;
+  /** Imperative ref: calling it sends a message programmatically. */
   onSendRef?: React.MutableRefObject<((msg: string) => void) | null>;
+
+  // History hook interface (passed down from page)
+  mounted: boolean;
+  activeId: string | null;
+  activeMessages: Message[];
+  createConversation: () => string;
+  updateMessages: (id: string, updater: (prev: Message[]) => Message[]) => void;
+  clearActive: () => void;
 }
 
 function LoadingIndicator() {
@@ -82,71 +92,106 @@ function LoadingIndicator() {
   );
 }
 
-export default function Chat({ onResetRef, onSendRef }: Props) {
-  const [messages, setMessages] = useState<Message[]>([]);
+export default function Chat({
+  onResetRef,
+  onSendRef,
+  mounted,
+  activeId,
+  activeMessages,
+  createConversation,
+  updateMessages,
+  clearActive,
+}: Props) {
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const welcomeRef = useRef<HTMLDivElement>(null);
 
-  const sendMessage = useCallback(async (content: string) => {
-    const userMsg: Message = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content,
-      timestamp: new Date(),
-    };
+  // Use a ref to track the current activeId inside the async sendMessage
+  // (avoids stale closure when conversation is created mid-flight)
+  const activeIdRef = useRef<string | null>(activeId);
+  useEffect(() => {
+    activeIdRef.current = activeId;
+  }, [activeId]);
 
-    setMessages((prev) => [...prev, userMsg]);
-    setLoading(true);
+  // Same for activeMessages — capture latest before async call
+  const activeMessagesRef = useRef<Message[]>(activeMessages);
+  useEffect(() => {
+    activeMessagesRef.current = activeMessages;
+  }, [activeMessages]);
 
-    try {
-      const history = messages.map((m) => ({ role: m.role, content: m.content }));
+  const sendMessage = useCallback(
+    async (content: string) => {
+      // Ensure a conversation exists
+      let convId = activeIdRef.current;
+      if (!convId) {
+        convId = createConversation();
+        activeIdRef.current = convId;
+      }
 
-      const res = await fetch(`${API_URL}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: content, history }),
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const data = await res.json();
-
-      const assistantMsg: Message = {
+      const userMsg: Message = {
         id: crypto.randomUUID(),
-        role: "assistant",
-        content: data.response,
-        escalate: data.escalate,
-        sources: data.sources,
+        role: "user",
+        content,
         timestamp: new Date(),
       };
 
-      setMessages((prev) => [...prev, assistantMsg]);
-    } catch {
-      const errorMsg: Message = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: "Hubo un error al conectar con el agente. Por favor, intentá de nuevo.",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMsg]);
-    } finally {
-      setLoading(false);
-    }
-  }, [messages]);
+      // Snapshot history BEFORE appending the new user message
+      const historySnapshot = activeMessagesRef.current.map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
 
-  // Expose reset callback to parent
+      updateMessages(convId, (prev) => [...prev, userMsg]);
+      setLoading(true);
+
+      try {
+        const res = await fetch(`${API_URL}/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: content, history: historySnapshot }),
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+
+        const assistantMsg: Message = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: data.response,
+          escalate: data.escalate,
+          sources: data.sources,
+          timestamp: new Date(),
+        };
+
+        updateMessages(convId, (prev) => [...prev, assistantMsg]);
+      } catch {
+        const errorMsg: Message = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: "Hubo un error al conectar con el agente. Por favor, intentá de nuevo.",
+          timestamp: new Date(),
+        };
+        updateMessages(convId, (prev) => [...prev, errorMsg]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [createConversation, updateMessages]
+  );
+
+  // Expose reset callback to parent (clears active conversation → shows welcome)
   useEffect(() => {
     if (onResetRef) {
       onResetRef.current = () => {
-        setMessages([]);
+        clearActive();
         setLoading(false);
       };
     }
     return () => {
       if (onResetRef) onResetRef.current = null;
     };
-  }, [onResetRef]);
+  }, [onResetRef, clearActive]);
 
   // Expose sendMessage to parent (for KB panel "ask about doc")
   useEffect(() => {
@@ -160,7 +205,10 @@ export default function Chat({ onResetRef, onSendRef }: Props) {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  }, [activeMessages, loading]);
+
+  const messages = activeMessages;
+  const isEmpty = messages.length === 0;
 
   // Welcome screen entrance animation
   useGSAP(
@@ -194,14 +242,17 @@ export default function Chat({ onResetRef, onSendRef }: Props) {
 
       return () => mm.revert();
     },
-    { scope: welcomeRef, dependencies: [messages.length === 0] }
+    { scope: welcomeRef, dependencies: [isEmpty] }
   );
-
-  const isEmpty = messages.length === 0;
 
   // Determine if the last message is from the assistant (to show follow-ups)
   const lastMsg = messages[messages.length - 1];
   const showFollowUps = !loading && lastMsg?.role === "assistant";
+
+  // Don't render until localStorage has been read
+  if (!mounted) {
+    return <div className="flex flex-col h-full" />;
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -263,7 +314,20 @@ export default function Chat({ onResetRef, onSendRef }: Props) {
               </div>
             </div>
           ) : (
-            messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
+            messages.map((msg, idx) => {
+              // Find the preceding user message for feedback context
+              const precedingQuestion =
+                msg.role === "assistant"
+                  ? (messages.slice(0, idx).reverse().find((m) => m.role === "user")?.content ?? "")
+                  : "";
+              return (
+                <MessageBubble
+                  key={msg.id}
+                  message={msg}
+                  precedingQuestion={precedingQuestion}
+                />
+              );
+            })
           )}
 
           {loading && <LoadingIndicator />}
