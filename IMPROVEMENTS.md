@@ -15,10 +15,10 @@ Tracking doc so work can resume across sessions. Each feature ends committed, te
 
 ## Phases (easy → hard)
 
-### Phase A — Frontend quick wins (no/low API)
-- [ ] #7 Friendly error states (cold-start "despertando el agente…", graceful backend errors)
-- [ ] #8 Area selector on welcome → tailors suggested questions + gives the agent area context
-- [ ] #2 Human escalation handoff (button on escalated answers → mailto/copy to Chief of Staff)
+### Phase A — Frontend quick wins (no/low API) ✅ DONE
+- [x] #7 Friendly error states (cold-start "despertando el agente…", graceful backend errors)
+- [x] #8 Area selector on welcome → tailors suggested questions + gives the agent area context
+- [x] #2 Human escalation handoff (button on escalated answers → mailto/copy to Chief of Staff)
 
 ### Phase B — Grounding & visibility (medium)
 - [ ] #5 First-week checklist (interactive, from Doc3, persisted in localStorage)
