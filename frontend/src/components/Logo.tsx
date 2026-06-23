@@ -39,6 +39,7 @@ export default function Logo({ height = 32, className }: LogoProps) {
       className={className}
       style={{ objectFit: "contain" }}
       priority
+      unoptimized
     />
   );
 }
