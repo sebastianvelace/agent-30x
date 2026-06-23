@@ -1,7 +1,7 @@
 import os
 import hashlib
 from functools import lru_cache
-import anthropic
+import voyageai
 from supabase import create_client, Client
 
 
@@ -11,8 +11,9 @@ def _supabase() -> Client:
 
 
 @lru_cache(maxsize=1)
-def _voyage() -> anthropic.Anthropic:
-    return anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+def _voyage() -> voyageai.Client:
+    # Voyage AI requires its own API key (get one at https://dash.voyageai.com)
+    return voyageai.Client(api_key=os.environ["VOYAGE_API_KEY"])
 
 BATCH_SIZE = 50
 
@@ -28,17 +29,18 @@ def embed_and_store(chunks: list[dict]) -> int:
         batch = chunks[i : i + BATCH_SIZE]
         texts = [c["content"] for c in batch]
 
-        response = _voyage().embeddings.create(
+        # voyageai.Client.embed() returns an EmbeddingsObject with .embeddings (list of lists)
+        response = _voyage().embed(
+            texts,
             model="voyage-3",
-            input=texts,
             input_type="document",
         )
 
         rows = []
-        for chunk, emb in zip(batch, response.data):
+        for chunk, embedding in zip(batch, response.embeddings):
             rows.append({
                 "content": chunk["content"],
-                "embedding": emb.embedding,
+                "embedding": embedding,
                 "source_doc": chunk["source_doc"],
                 "metadata": {
                     **chunk["metadata"],
@@ -46,10 +48,10 @@ def embed_and_store(chunks: list[dict]) -> int:
                 },
             })
 
-        _supabase().table("chunks").upsert(
-            rows,
-            on_conflict="source_doc,metadata->>content_hash",
-        ).execute()
+        # Plain insert — duplicates are handled at the script level via --replace/--reset flags.
+        # The metadata->>'content_hash' expression is not a column with a unique index,
+        # so upsert on_conflict with a JSONB path expression would fail at runtime.
+        _supabase().table("chunks").insert(rows).execute()
 
         stored += len(rows)
         print(f"[ingest] batch {i // BATCH_SIZE + 1}: {len(rows)} chunks stored")

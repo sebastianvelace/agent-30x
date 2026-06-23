@@ -1,7 +1,7 @@
 import os
 from functools import lru_cache
 from supabase import create_client, Client
-import anthropic
+import voyageai
 
 
 @lru_cache(maxsize=1)
@@ -10,17 +10,18 @@ def _supabase() -> Client:
 
 
 @lru_cache(maxsize=1)
-def _voyage() -> anthropic.Anthropic:
-    return anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+def _voyage() -> voyageai.Client:
+    return voyageai.Client(api_key=os.environ["VOYAGE_API_KEY"])
 
 
 def embed_query(text: str) -> list[float]:
-    response = _voyage().embeddings.create(
+    # voyageai.Client.embed() returns EmbeddingsObject with .embeddings (list of lists)
+    response = _voyage().embed(
+        [text],
         model="voyage-3",
-        input=[text],
         input_type="query",
     )
-    return response.data[0].embedding
+    return response.embeddings[0]
 
 
 def retrieve_chunks(query: str) -> list[dict]:
