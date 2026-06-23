@@ -418,20 +418,35 @@ agent-30x/
 │   ├── requirements.txt
 │   └── Procfile             # Railway: web: uvicorn api.main:app --host 0.0.0.0 --port $PORT
 ├── frontend/
+│   ├── public/                 # 30X logo assets (theme-aware wordmark + favicon)
 │   └── src/
 │       ├── app/
-│       │   ├── page.tsx     # Main chat page
-│       │   └── layout.tsx
-│       └── components/
-│           ├── Chat.tsx     # Main chat component
-│           ├── Message.tsx  # Message bubble
-│           └── Input.tsx    # Input with send button
+│       │   ├── page.tsx        # Main chat page + header
+│       │   ├── layout.tsx      # Root layout, ThemeProvider, fonts, metadata
+│       │   └── globals.css     # Theme variables (dark/light) + markdown styles
+│       ├── components/
+│       │   ├── Chat.tsx        # Chat state, history, suggested questions
+│       │   ├── Message.tsx     # Message bubble, markdown render, copy, sources
+│       │   ├── Input.tsx       # Auto-growing input with send
+│       │   ├── Logo.tsx        # Theme-aware 30X wordmark
+│       │   └── ThemeToggle.tsx # Light/dark switch (next-themes)
+│       └── types/
+│           └── chat.ts         # Shared message types
 ├── docs/                    # Knowledge base PDFs (gitignored — internal 30X documents)
-├── scripts/                 # Utility scripts
+├── supabase_setup.sql       # Run once in Supabase SQL Editor
+├── DEVELOPMENT_LOG.md       # Problems faced during the build and how they were solved
 └── README.md
 ```
 
 > PDFs in `docs/` are in `.gitignore` as they are internal 30X documents. The system works with any set of PDFs placed in that folder and re-indexed.
+
+### Frontend features
+
+- **Grounded chat** with the 5 onboarding questions surfaced as starter prompts (RF-04)
+- **Markdown rendering** so the agent's tables and formatting display properly (react-markdown + remark-gfm)
+- **Light/dark theme** with the 30X brand identity (next-themes, persisted, no flash)
+- **Motion** via GSAP for message and welcome-screen entrance animations (respects `prefers-reduced-motion`)
+- **Source attribution** — each answer shows which internal document it came from
 
 ---
 
