@@ -1,4 +1,12 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 30X Onboarding Agent — Frontend
+
+Next.js 16.2.9 + Turbopack chat agent for 30X onboarding.
+
+## Features
+
+- **Inline source passages**: answers now show source chips; clicking any chip reveals the exact passage(s) extracted from that document, with a semantic similarity hint.
+- **First-week checklist**: sidebar item "Mi primera semana" opens a drawer with the full Day 1 / Day 2–3 / Day 4–5 / Week 2+ checklist. State persists in `localStorage` (key `30x-first-week-v1`).
+- **Gaps admin page** (`/gaps`): standalone admin view, gated by the same key as `GET /admin/gaps` (`INGEST_API_KEY`). Enter the key to see a table of unanswered/escalated questions. Wrong key shows "clave incorrecta".
 
 ## Getting Started
 
