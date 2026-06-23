@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.routes.chat import router as chat_router
 from api.routes.ingest import router as ingest_router
 from api.routes.feedback import router as feedback_router
+from api.routes.admin import router as admin_router
 
 app = FastAPI(title="30X Onboarding Agent", version="1.0.0")
 
@@ -25,6 +26,7 @@ app.add_middleware(
 app.include_router(chat_router)
 app.include_router(ingest_router)
 app.include_router(feedback_router)
+app.include_router(admin_router)
 
 
 @app.get("/health")
